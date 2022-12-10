@@ -5,7 +5,7 @@ from matplotlib import cm
 import matplotlib.colors as colors
 import matplotlib.pylab as pltlab
 import numpy
-import gdal
+from osgeo import gdal
 
 dem_name = "/Users/alex/Downloads/HerodotusA_A_dem.cub"
 
