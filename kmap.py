@@ -1,27 +1,44 @@
+#!/usr/bin/env python3
+"""
+Author: Megan Heinricksen (original author)
+        Alex Huft (Python translator)
+Description: Display a cube file after statistical analysis
+"""
+import argparse
 import sys
 import math
 import collections
 from matplotlib import cm
-import matplotlib.colors as colors
-import matplotlib.pylab as pltlab
-import numpy
+from matplotlib import colors
+import matplotlib.pyplot as plot
+import numpy as np
 from osgeo import gdal
 
-dem_name = "/Users/alex/Downloads/HerodotusA_A_dem.cub"
+from tools. import check_a
 
 
-def color_mapping(dem_name, a, *args):
-    dem_file = gdal.Open(dem_name)
-    dem = numpy.array(dem_file.GetRasterBand(1).ReadAsArray())
-    dem[dem == -3.40282265508890445e+38] = numpy.NaN
-    log_it = open(dem_name + ' log.txt', 'w')
+def cube_to_array(cube) -> np.array:
+    """generate np array from cube file
+
+    Args:
+        cube (str): path to cube file
+
+    Returns:
+        np.array: array representing cube file
+    """
+    dem = gdal.Open(cube)
+    dem_array = np.array(dem.GetRasterBand(1).ReadAsArray())
+    dem_array[dem_array == -3.40282265508890445e+38] = np.NaN
+    return dem_array
+
+
+def color_mapping(dem_name, a, cube_file):
+    dem = cube_to_array(cube_file)
     if a < 0:
         print('\nERROR: a = alpha value. It must be between 0 (inclusive) and 90 (exclusive)\n')
-        log_it.write('\nERROR: a = alpha value. It must be between 0 (inclusive) and 90 (exclusive)\n')
         sys.exit()
     elif a > 90:
         print('\nERROR: a = alpha value. It must be between 0 (inclusive) and 90 (exclusive)\n')
-        log_it.write('\nERROR: a = alpha value. It must be between 0 (inclusive) and 90 (exclusive)\n')
         sys.exit()
     elif a == 90:
         a = 89.99999999999999
@@ -35,23 +52,19 @@ def color_mapping(dem_name, a, *args):
 
     if 'lut' in str.lower(str(args)):
         print('\nImporting LUT file\n')
-        log_it.write('\nImporting LUT file\n')
         # TODO Read in LUT file
     elif ' m ' in str.lower(str(args)):
         print('Importing matlab colormap')
-        log_it.write('\nImporting matlab colormap\n')
         # TODO assign map from colormap file
     try:
         color_map_type = cm.get_cmap(args[1])
-        norm_map_alpha = numpy.array(color_map_type.colors)
+        norm_map_alpha = np.array(color_map_type.colors)
         print('Using ' + args[1] + ' Colormap')
-        log_it.write('Using ' + args[1] + ' Colormap')
         norm_map = norm_map_alpha[:, :3]
         map = norm_map * 255
     except ValueError:
         print('No lut, matlab colormap, or regular colormap; using standard map')
-        log_it.write('No lut or matlab colormap using standard map')
-        map = numpy.array([[30, 83, 151],
+        map = np.array([[30, 83, 151],
                         [69, 117, 180],
                         [97, 144, 195],
                         [125, 172, 209],
@@ -71,41 +84,38 @@ def color_mapping(dem_name, a, *args):
         norm_map = map / 255
     except IndexError:
         print('No lut, matlab colormap, or regular colormap; using standard map')
-        log_it.write('No lut or matlab colormap using standard map')
-        map = numpy.array([[30, 83, 151],
-                           [69, 117, 180],
-                           [97, 144, 195],
-                           [125, 172, 209],
-                           [154, 197, 223],
-                           [185, 217, 234],
-                           [215, 238, 245],
-                           [233, 247, 233],
-                           [255, 255, 191],
-                           [255, 244, 174],
-                           [255, 233, 157],
-                           [254, 215, 138],
-                           [253, 183, 116],
-                           [253, 150, 95],
-                           [243, 116, 76],
-                           [229, 82, 57],
-                           [215, 48, 39]])
+        map = np.array([[30, 83, 151],
+                        [69, 117, 180],
+                        [97, 144, 195],
+                        [125, 172, 209],
+                        [154, 197, 223],
+                        [185, 217, 234],
+                        [215, 238, 245],
+                        [233, 247, 233],
+                        [255, 255, 191],
+                        [255, 244, 174],
+                        [255, 233, 157],
+                        [254, 215, 138],
+                        [253, 183, 116],
+                        [253, 150, 95],
+                        [243, 116, 76],
+                        [229, 82, 57],
+                        [215, 48, 39]])
         norm_map = map / 255
 
     # get dimensions and sort values
     # ordered values
-    log_it.write(str(dem.shape))
-    [m, n] = numpy.size(dem, 0), numpy.size(dem, 1)
-    log_it.write('\n[m, n]=' + str([m, n]) + '\n')
-    D = numpy.around(numpy.sort(dem, axis=None), decimals=10)
-    I = numpy.argsort(dem, axis=None)
+    [m, n] = np.size(dem, 0), np.size(dem, 1)
+    D = np.around(np.sort(dem, axis=None), decimals=10)
+    I = np.argsort(dem, axis=None)
     print(I[0])
     # log_it.write('\nD= ' + str(D) + '\n')
     # log_it.write('\nI= ' + str(I) + '\n')
 
     # Finding max and min Index non null number
-    max_elev = numpy.nanmax(D)
-    min_elev = numpy.nanmin(D)
-    max_idx = (numpy.count_nonzero(~numpy.isnan(D)))-1
+    max_elev = np.nanmax(D)
+    min_elev = np.nanmin(D)
+    max_idx = (np.count_nonzero(~np.isnan(D)))-1
 
     # EQUATION #
     # Let v_diag = v_n - v_1 and p_i = < v_i, v_diag>/|v_diag|^2
@@ -124,47 +134,42 @@ def color_mapping(dem_name, a, *args):
     # Calculate v_diag & V:
     # dx = max_idx - 1
     try:
-        dx = numpy.array((D[max_idx] - D[0]) / math.tan(math.radians(a)))
+        dx = np.array((D[max_idx] - D[0]) / math.tan(math.radians(a)))
     except ZeroDivisionError:
         print("encountered zero division error error in determining dx")
-        log_it.write("encountered zero division error in determining dx")
         sys.exit()
-    dx_ = numpy.repeat(dx, len(D))
-    dy = numpy.array(D[max_idx] - D[0])
-    dy_ = numpy.repeat(dy, len(D))
+    dx_ = np.repeat(dx, len(D))
+    dy = np.array(D[max_idx] - D[0])
+    dy_ = np.repeat(dy, len(D))
     v_diag = [dx, dy]
 
     # Square of magnitude of v_diag.
-    denominator = numpy.linalg.norm(v_diag) * numpy.linalg.norm(v_diag)
-    
-    v_ida_numerator = numpy.array(range(0, len(D)))
-    v_idx = numpy.array(v_ida_numerator / len(D) * dx)
-    #  print('\nmin v_idx = ' + str(numpy.nanmin(v_idx)) + '\n')
-    #  print('\nmax v_idx = ' + str(numpy.nanmax(v_idx)) + '\n')
+    denominator = np.linalg.norm(v_diag) * np.linalg.norm(v_diag)
+
+    v_ida_numerator = np.array(range(0, len(D)))
+    v_idx = np.array(v_ida_numerator / len(D) * dx)
     # vector of positions (indices) (why??)
     # v_idx=( 1:1:length(D) ) ; %vector of positions (indices)
-    v_i = numpy.column_stack((v_idx, D))  # 2 by n matrix v_i
+    v_i = np.column_stack((v_idx, D))  # 2 by n matrix v_i
 
-    V_diag = numpy.column_stack((dx_, dy_))
+    V_diag = np.column_stack((dx_, dy_))
 
-    # P = numpy.array(numpy.einsum("ij,ij->i", v_i, V_diag) / denominator)
-    P = (numpy.sum(v_i*V_diag, axis=1) / denominator)
+    # P = np.array(np.einsum("ij,ij->i", v_i, V_diag) / denominator)
+    P = (np.sum(v_i*V_diag, axis=1) / denominator)
     # min(P)
     # max(P)
-    print('min P = ' + str(numpy.nanmin(P)) + '\n')
-    print('max P = ' + str(numpy.nanmax(P)) + '\n')
-    log_it.write('min P = ' + str(numpy.nanmin(P)) + '\n')
-    log_it.write('max P = ' + str(numpy.nanmax(P)) + '\n')
+    print('min P = ' + str(np.nanmin(P)) + '\n')
+    print('max P = ' + str(np.nanmax(P)) + '\n')
 
     # Put values back into Matrix
     C = [x for x in I]
-    P_pmin = numpy.array(P - numpy.nanmin(P))
-    Imv = int(numpy.nanmin(I))
-    while Imv < numpy.size(I):
+    P_pmin = np.array(P - np.nanmin(P))
+    Imv = int(np.nanmin(I))
+    while Imv < np.size(I):
         I_index_value = I[Imv]
         C[I_index_value] = P_pmin[Imv]
         Imv += 1
-    color_dem = numpy.reshape(C, (m, n))
+    color_dem = np.reshape(C, (m, n))
 
     # Colormaps
 
@@ -203,42 +208,42 @@ def color_mapping(dem_name, a, *args):
 
     if 'display' in args or 'Display' in args:
         color_map = colors.ListedColormap(norm_map)
-        pltlab.imshow(color_dem)
-        pltlab.set_cmap(color_map)
-        pltlab.show()
+        plot.imshow(color_dem)
+        plot.set_cmap(color_map)
+        plot.show()
 
     # Initialize Elevation/Bin related Variables
 
     elev_range = max_elev - min_elev
-    step = (numpy.nanmax(P_pmin) - numpy.nanmin(P_pmin)) / (numpy.size(map, axis=0))
-    elevs = numpy.array(numpy.zeros((int(numpy.size(map, axis=0)))))
+    step = (np.nanmax(P_pmin) - np.nanmin(P_pmin)) / (np.size(map, axis=0))
+    elevs = np.array(np.zeros((int(np.size(map, axis=0)))))
 
     # Figure out preliminary elevation values
     # add min and max elev and pcts
     elevs[0] = min_elev
     # fill in the rest of the elevations
     l = 1
-    while l < numpy.size(map, axis=0):  # 17
-        #  P_pmin = numpy.around(numpy.array(P - numpy.nanmin(P)), decimals=15)
-        step_l = numpy.around((step * l), decimals=15)
+    while l < np.size(map, axis=0):  # 17
+        #  P_pmin = np.around(np.array(P - np.nanmin(P)), decimals=15)
+        step_l = np.around((step * l), decimals=15)
         P_pmin_step_l = (P_pmin - step_l)
-        absolute_P_step = numpy.around(numpy.absolute(P_pmin_step_l), decimals=15)
-        Min_absolute_P_step = numpy.nanmin(absolute_P_step)
-        closestIndex = numpy.array(numpy.where(absolute_P_step == Min_absolute_P_step))
+        absolute_P_step = np.around(np.absolute(P_pmin_step_l), decimals=15)
+        Min_absolute_P_step = np.nanmin(absolute_P_step)
+        closestIndex = np.array(np.where(absolute_P_step == Min_absolute_P_step))
         elevs[l] = D[closestIndex.flat[-1]]
         l += 1
 
     # Figure out elevation Differences, and Min Bin Size
-    elev_diffs = numpy.array(numpy.diff(elevs, n=1, axis=0))
-    min_diff = numpy.nanmin(elev_diffs)  # TODO compare this to min bin size for final rounding
-    max_diff = numpy.nanmax(elev_diffs)
+    elev_diffs = np.array(np.diff(elevs, n=1, axis=0))
+    min_diff = np.nanmin(elev_diffs)  # TODO compare this to min bin size for final rounding
+    max_diff = np.nanmax(elev_diffs)
     # rounding options
-    round_opts = numpy.array([1, 5, 10, 25, 50, 100])  # potential ways to round can be edited
+    round_opts = np.array([1, 5, 10, 25, 50, 100])  # potential ways to round can be edited
     # try and find out which minimum bin size is closet to the size of the smallest difference
     round_diffs = round_opts - min_diff
     round_diffs = [math.inf if x <= -1 else x for x in round_diffs]
-    round_I = list(numpy.where(numpy.absolute(round_diffs) == numpy.nanmin(
-        numpy.absolute(round_diffs))))  # rounding option that's > or ~= to minimum
+    round_I = list(np.where(np.absolute(round_diffs) == np.nanmin(
+        np.absolute(round_diffs))))  # rounding option that's > or ~= to minimum
 
     # Make sure min_bin_size isn't larger than max_bin_size
     while max_diff < round_opts[tuple(round_I)]:
@@ -247,10 +252,10 @@ def color_mapping(dem_name, a, *args):
     # Make sure legend can handle minimum bin size
     min_percent = 0.02 * elev_range
     if min_percent > round_opts[tuple(round_I)]:
-        min_percent_diffs = numpy.ndarray.flatten(round_opts) - min_percent
+        min_percent_diffs = np.ndarray.flatten(round_opts) - min_percent
         min_percent_diffs = [math.inf if x <= -1 else x for x in min_percent_diffs]
-        round_I = list(numpy.where(
-            min_percent_diffs == numpy.nanmin(min_percent_diffs)))  # rounding option that's > or != to minimum
+        round_I = list(np.where(
+            min_percent_diffs == np.nanmin(min_percent_diffs)))  # rounding option that's > or != to minimum
         min_value = min_percent
     else:
         min_value = min_diff
@@ -288,22 +293,21 @@ def color_mapping(dem_name, a, *args):
             min_bin_size = 100
     else:
         print('Oh no! Something went wrong with determining how to round\n')
-        log_it.write('Oh no! Something went wrong with determining how to round\n')
         sys.exit()
     # Which Bins are too small - Initial pass
-    S = collections.deque([], maxlen=numpy.size(elev_diffs))  # Stack for center bin numbers
-    Dir = collections.deque([], maxlen=numpy.size(elev_diffs))  # stack for direction to shift bins
+    S = collections.deque([], maxlen=np.size(elev_diffs))  # Stack for center bin numbers
+    Dir = collections.deque([], maxlen=np.size(elev_diffs))  # stack for direction to shift bins
     # Deque's are a type of stack in python that can be pushed or popped from either side
 
     # TODO maybe too_small is not necessary
     too_small = (elev_diffs < min_bin_size)  # logical array of bins that are too small 1 = true
-    too_small = numpy.multiply(too_small, 1)
+    too_small = np.multiply(too_small, 1)
     k = 0
-    while k < numpy.size(elev_diffs):
+    while k < np.size(elev_diffs):
         if too_small[k] == 1:  # find an instance of the first in a streak of too small bins
             j = k  # elev_diffs index
             b = 0  # Number of too small bins
-            while j < numpy.size(elev_diffs):  # TODO make this an if statement
+            while j < np.size(elev_diffs):  # TODO make this an if statement
                 if too_small[j] == 0:  # find the last instance of the streak of too small bins
                     # Create a stack (FILO) of the center bins and the
                     # directions that they need to be adjusted:
@@ -340,7 +344,7 @@ def color_mapping(dem_name, a, *args):
                 if bin_num == 1:  # min edge case
                     S.append(bin_num)
                     Dir.append(1)
-                elif bin_num == numpy.size(elevs_adj, 2) - 1:
+                elif bin_num == np.size(elevs_adj, 2) - 1:
                     S.append(bin_num)
                     Dir.append(-1)
                 else:
@@ -367,7 +371,7 @@ def color_mapping(dem_name, a, *args):
                         Dir.append(1)
         elif expandDir == 1:
             if (elevs_adj[int(bin_num + 1)]) - elevs_adj[int(bin_num)] < min_bin_size:
-                if bin_num == float(int(numpy.size(elevs_adj, 0)) - 1):
+                if bin_num == float(int(np.size(elevs_adj, 0)) - 1):
                     S.append(int(bin_num))
                     Dir.append(-1)
                 else:
@@ -397,13 +401,12 @@ def color_mapping(dem_name, a, *args):
                         Dir.append(-1)
         else:
             print("\nOh god. something bad has happened you might what to fix that")
-            log_it.write("\nOh god. something bad has happened you might what to fix that\n")
 
     # elevs_adj /= 1000
     # Round Results
 
     final_elevs = [x for x in elevs_adj]  # Initial array
-    max_round_bin = int(numpy.size(elevs_adj, axis=0) - 1)
+    max_round_bin = int(np.size(elevs_adj, axis=0) - 1)
     Smallest_final_elevs = final_elevs[0] # not to be rounded so will be replaced after rounding
     Largest_final_elevs = final_elevs[-1]
     print(final_elevs)
@@ -435,13 +438,11 @@ def color_mapping(dem_name, a, *args):
     else:
         print('Oh no! Something went wrong with determining how to round the results')
         log_it.write('\nOh no! Something went wrong with determining how to round the results\n')
-    final_elevs = numpy.array(final_elevs)
+    final_elevs = np.array(final_elevs)
     # final_elevs /= 1000
     final_elevs[0] = Smallest_final_elevs
     final_elevs[-1] = Largest_final_elevs
     # calculate percentages and make output file
-    log_it.write('\nClosing log... \nCreating lut file\n')
-    log_it.close()
     print(final_elevs)
     pcts_pre_pre = (final_elevs - min_elev)
     pcts_pre = pcts_pre_pre / elev_range
@@ -449,14 +450,14 @@ def color_mapping(dem_name, a, *args):
     fileID = open(dem_name + ' .lut', 'w')
     fileID.write('nv 0 0 0 //noData to black\n')  # NO VALUE LINE
     fileID.write('0% ' + str(map[0, 0]) + ' ' + str(map[0, 1]) + ' ' + str(map[0, 2]) + '\n')  # 0% Line
-    for e in range(1, numpy.size(pcts, 0)):
-        fileID.write(str(numpy.around(pcts[e], decimals=5)) + '% ' + str(map[(e - 1), 0]) + ' ' + str(map[(e - 1), 1]) + ' ' + str(map[(e - 1), 2]) + '\n')
-        fileID.write(str(numpy.around(pcts[e], decimals=5)) + '% ' + str(map[e, 0]) + ' ' + str(map[e, 1]) + ' ' + str(map[e, 2]) + '\n')
-    fileID.write('100% ' + str(map[numpy.size(map, 0)-1, 0]) + ' ' + str(map[numpy.size(map, 0)-1, 1]) + ' ' + str(map[numpy.size(map, 0)-1, 2]) + '\n')  # 100%
+    for e in range(1, np.size(pcts, 0)):
+        fileID.write(str(np.around(pcts[e], decimals=5)) + '% ' + str(map[(e - 1), 0]) + ' ' + str(map[(e - 1), 1]) + ' ' + str(map[(e - 1), 2]) + '\n')
+        fileID.write(str(np.around(pcts[e], decimals=5)) + '% ' + str(map[e, 0]) + ' ' + str(map[e, 1]) + ' ' + str(map[e, 2]) + '\n')
+    fileID.write('100% ' + str(map[np.size(map, 0)-1, 0]) + ' ' + str(map[np.size(map, 0)-1, 1]) + ' ' + str(map[np.size(map, 0)-1, 2]) + '\n')  # 100%
     fileID.close()
     print('Completed ')
     print(dem_name)
     print('\n')
 
-
-color_mapping(dem_name, 45, 'Display', 'plasma')
+if __name__ == "__main__":
+    color_mapping(dem_name, 45, 'Display', 'plasma')
